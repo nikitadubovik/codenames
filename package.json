@@ -1,0 +1,17 @@
+{
+  "name": "codenames-mp",
+  "version": "1.0.0",
+  "description": "Простой мультиплеер Codenames для игры с друзьями",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Codenames</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --panel: #1e222c;
+    --line: #2b303c;
+    --ink: #e8eaf0;
+    --muted: #8b93a7;
+    --card: #2a2f3b;
+    --red: #d1495b;
+    --blue: #3d7dca;
+    --neutral: #c9b48a;
+    --assassin: #12151b;
+    --accent: #e0b23c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; letter-spacing: .16em; text-transform: uppercase; margin: 4px 0 14px; }
+  h1 span { color: var(--accent); }
+  .lobby { max-width: 380px; margin: 12vh auto; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
+  input, button, select { font: inherit; }
+  input {
+    width: 100%; padding: 11px 12px; margin: 6px 0 12px; background: #171a22;
+    border: 1px solid var(--line); border-radius: 9px; color: var(--ink);
+  }
+  button {
+    padding: 10px 14px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--card); color: var(--ink); cursor: pointer; transition: .12s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #171a22; border-color: var(--accent); font-weight: 600; }
+  .hidden { display: none !important; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 14px; }
+  .turn-red { color: var(--red); font-weight: 700; }
+  .turn-blue { color: var(--blue); font-weight: 700; }
+  .count { padding: 3px 9px; border-radius: 20px; font-weight: 700; font-size: 14px; }
+  .count.red { background: rgba(209,73,91,.16); color: var(--red); }
+  .count.blue { background: rgba(61,125,202,.16); color: var(--blue); }
+  .grow { flex: 1; }
+
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .card {
+    position: relative; aspect-ratio: 5/3; border-radius: 10px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-weight: 600; font-size: clamp(11px, 2.4vw, 15px); padding: 4px;
+    user-select: none; transition: transform .08s, box-shadow .12s;
+  }
+  .card:hover { transform: translateY(-1px); }
+  .card .marks { position: absolute; bottom: 3px; right: 5px; font-size: 10px; color: #fff;
+    background: rgba(0,0,0,.45); border-radius: 8px; padding: 1px 5px; }
+  /* окраска для капитана (по ключу, ещё не открытые) */
+  .card.k-red    { box-shadow: inset 0 0 0 3px var(--red); }
+  .card.k-blue   { box-shadow: inset 0 0 0 3px var(--blue); }
+  .card.k-neutral{ box-shadow: inset 0 0 0 3px var(--neutral); }
+  .card.k-assassin{ box-shadow: inset 0 0 0 3px #000; background: #22242c; }
+  /* открытые карты (видят все) */
+  .card.open { color: #fff; }
+  .card.open.red    { background: var(--red); border-color: var(--red); }
+  .card.open.blue   { background: var(--blue); border-color: var(--blue); }
+  .card.open.neutral{ background: var(--neutral); color:#2a241a; border-color: var(--neutral); }
+  .card.open.assassin{ background: var(--assassin); color:#d1495b; border: 1px solid #d1495b; }
+  .card.open::after { content:"✓"; position:absolute; top:3px; left:6px; font-size:11px; opacity:.85; }
+  .card.open.assassin::after { content:"💀"; }
+
+  .clue-box { display:flex; gap:8px; align-items:center; flex-wrap: wrap; margin-top:14px;
+    background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .clue-box input[type=text] { width: 200px; margin:0; }
+  .clue-box input[type=number] { width: 70px; margin:0; }
+  .current-clue { font-size: 18px; }
+  .current-clue b { color: var(--accent); }
+  .log { margin-top:14px; font-size:13px; color: var(--muted); line-height:1.7;
+    background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; max-height:150px; overflow:auto; }
+  .players { font-size:13px; color: var(--muted); }
+  .banner { text-align:center; font-size:20px; font-weight:700; padding:14px; border-radius:12px; margin-bottom:14px; }
+  .banner.red { background: rgba(209,73,91,.18); color: var(--red); }
+  .banner.blue { background: rgba(61,125,202,.18); color: var(--blue); }
+  .role-pick { display:flex; gap:8px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+
+<!-- ЛОББИ -->
+<div id="lobby" class="lobby">
+  <h1>Code<span>names</span></h1>
+  <label>Имя</label>
+  <input id="name" placeholder="Как вас звать" maxlength="20" />
+  <label>Код комнаты</label>
+  <input id="room" placeholder="например ALPHA" maxlength="12" />
+  <button class="primary" style="width:100%" onclick="join()">Войти</button>
+  <p style="color:var(--muted);font-size:13px;margin-top:14px">
+    Отправьте друзьям одинаковый код комнаты — попадёте в одну игру.
+  </p>
+</div>
+
+<!-- ИГРА -->
+<div id="game" class="wrap hidden">
+  <h1>Code<span>names</span> · <span id="roomLabel" style="color:var(--muted);font-size:14px"></span></h1>
+
+  <!-- выбор команды/роли -->
+  <div id="setup" class="bar">
+    <span>Выберите сторону:</span>
+    <div class="role-pick">
+      <button onclick="setRole('red','captain')">🔴 Капитан</button>
+      <button onclick="setRole('red','guesser')">🔴 Игрок</button>
+      <button onclick="setRole('blue','captain')">🔵 Капитан</button>
+      <button onclick="setRole('blue','guesser')">🔵 Игрок</button>
+    </div>
+  </div>
+
+  <div id="winBanner" class="banner hidden"></div>
+
+  <div class="bar">
+    <span>Ход: <span id="turnLabel">—</span></span>
+    <span class="grow"></span>
+    <span class="count red" id="cRed">9</span>
+    <span class="count blue" id="cBlue">8</span>
+    <button onclick="restart()">Новая партия</button>
+  </div>
+
+  <div id="board" class="board"></div>
+
+  <!-- подсказка капитана -->
+  <div id="clueInput" class="clue-box hidden">
+    <span>Ваша подсказка:</span>
+    <input type="text" id="clueWord" placeholder="слово" />
+    <input type="number" id="clueNum" min="0" max="9" value="1" />
+    <button class="primary" onclick="sendClue()">Дать подсказку</button>
+  </div>
+
+  <!-- текущая подсказка + пас -->
+  <div id="clueShow" class="clue-box hidden">
+    <span class="current-clue">Подсказка: <b id="clueText">—</b></span>
+    <span class="grow"></span>
+    <span id="guessesLeft" style="color:var(--muted)"></span>
+    <button id="passBtn" onclick="pass()">Завершить ход</button>
+  </div>
+
+  <div class="players" id="playersList" style="margin-top:14px"></div>
+  <div class="log" id="log"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let me = { name: "", team: null, role: null };
+let myKey = null;      // ключ приходит только капитанам
+let state = null;
+let clickTimer = null;
+
+function join() {
+  const name = document.getElementById("name").value.trim() || "Игрок";
+  const room = (document.getElementById("room").value.trim() || "MAIN").toUpperCase();
+  me.name = name;
+  socket.emit("join", { room, name });
+  document.getElementById("lobby").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  document.getElementById("roomLabel").textContent = "комната " + room;
+}
+
+function setRole(team, role) {
+  me.team = team; me.role = role; myKey = null;
+  socket.emit("setRole", { team, role });
+  document.getElementById("setup").classList.add("hidden");
+}
+
+function sendClue() {
+  const word = document.getElementById("clueWord").value.trim();
+  const number = parseInt(document.getElementById("clueNum").value, 10);
+  if (!word) return;
+  socket.emit("clue", { word, number });
+  document.getElementById("clueWord").value = "";
+}
+
+function pass() { socket.emit("pass"); }
+function restart() { socket.emit("restart"); }
+
+// один клик — пометка, двойной — открыть
+function onCardClick(i) {
+  if (clickTimer) return;
+  clickTimer = setTimeout(() => {
+    socket.emit("mark", { index: i });
+    clickTimer = null;
+  }, 240);
+}
+function onCardDbl(i) {
+  clearTimeout(clickTimer); clickTimer = null;
+  socket.emit("guess", { index: i });
+}
+
+socket.on("key", (k) => { myKey = k; render(); });
+socket.on("state", (s) => { state = s; render(); });
+
+function render() {
+  if (!state) return;
+  const g = state;
+
+  // синхронизируем свою роль из серверного списка (на случай переподключения)
+  const meServer = g.players.find(p => p.name === me.name);
+  if (meServer) { me.team = meServer.team; me.role = meServer.role; }
+
+  // индикаторы
+  const turnEl = document.getElementById("turnLabel");
+  turnEl.textContent = g.turn === "red" ? "красные" : "синие";
+  turnEl.className = g.turn === "red" ? "turn-red" : "turn-blue";
+  document.getElementById("cRed").textContent = g.remaining.red;
+  document.getElementById("cBlue").textContent = g.remaining.blue;
+
+  // поле
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  g.words.forEach((word, i) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    const opened = g.revealed[i];
+    if (opened) {
+      el.classList.add("open", opened);
+    } else if (me.role === "captain" && myKey) {
+      el.classList.add("k-" + myKey[i]); // капитан видит цвета
+    }
+    el.textContent = word;
+
+    // пометки других игроков
+    const marks = g.marks[i];
+    if (marks && marks.length && !opened) {
+      const m = document.createElement("div");
+      m.className = "marks";
+      m.textContent = "👁 " + marks.join(", ");
+      el.appendChild(m);
+    }
+
+    // кликать может только игрок ходящей команды в фазе отгадывания
+    const canPlay = me.role === "guesser" && me.team === g.turn && g.phase === "guess" && !opened && !g.winner;
+    if (canPlay) {
+      el.onclick = () => onCardClick(i);
+      el.ondblclick = () => onCardDbl(i);
+    } else {
+      el.style.cursor = "default";
+    }
+    board.appendChild(el);
+  });
+
+  // блок подсказки капитана
+  const clueInput = document.getElementById("clueInput");
+  const showCap = me.role === "captain" && me.team === g.turn && g.phase === "clue" && !g.winner;
+  clueInput.classList.toggle("hidden", !showCap);
+
+  // текущая подсказка + пас
+  const clueShow = document.getElementById("clueShow");
+  if (g.clue && g.phase === "guess") {
+    clueShow.classList.remove("hidden");
+    document.getElementById("clueText").textContent = `${g.clue.word} · ${g.clue.number}`;
+    document.getElementById("guessesLeft").textContent = `попыток осталось: ${g.guessesLeft}`;
+    const canPass = me.role === "guesser" && me.team === g.turn && !g.winner;
+    document.getElementById("passBtn").disabled = !canPass;
+  } else {
+    clueShow.classList.add("hidden");
+  }
+
+  // победа
+  const banner = document.getElementById("winBanner");
+  if (g.winner) {
+    banner.className = "banner " + g.winner;
+    banner.textContent = (g.winner === "red" ? "🔴 Красные" : "🔵 Синие") + " победили!";
+    banner.classList.remove("hidden");
+  } else {
+    banner.classList.add("hidden");
+  }
+
+  // игроки и лог
+  document.getElementById("playersList").innerHTML = "Игроки: " + g.players.map(p => {
+    const t = p.team === "red" ? "🔴" : p.team === "blue" ? "🔵" : "⚪";
+    const r = p.role === "captain" ? "★" : p.role === "guesser" ? "" : "?";
+    return `${t}${r} ${p.name}`;
+  }).join(" · ");
+  document.getElementById("log").innerHTML = g.log.map(l => `<div>${l}</div>`).join("");
+}
+</script>
+</body>
+</html>
